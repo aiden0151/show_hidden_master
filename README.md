@@ -1,5 +1,7 @@
 # ShowHidden (ShowClips & ShowTriggers) - Enhanced
 
+<img width="276" height="553" alt="image" src="https://github.com/user-attachments/assets/7c95a5b0-bebe-47ff-8a12-f1eebe9f8873" />
+
 **Enhanced** addon for Garry's mod Bunnyhop gamemode that shows invisible obstacles with improved toggle-all functionality and streamlined commands.
 
 ## ✨ New Enhanced Features
