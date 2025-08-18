@@ -41,6 +41,9 @@ local cv_triggers = CreateClientConVar("showtriggers_enabled", "0", false, true,
 local cv_triggerTypes = CreateClientConVar("showtriggers_types", tostring(ShowHidden.ALL_TYPES),
 true, false, "Enabled trigger types bit-mask", 0, ShowHidden.ALL_TYPES)
 
+-- Compute a local bitmask representing all trigger types (1..TriggerType.MAX)
+local ALL_TRIGGER_TYPES = math.pow(2, TriggerType.MAX) - 1
+
 local g_triggerAppearTime = {}
 local g_triggersCount = {}
 local g_triggersColors = DEFAULT_TRIGGERS_COLORS
@@ -624,7 +627,7 @@ local function getColMatValues(triggerType)
 		return table.Copy(DEFAULT_PROPS_COLOR), table.Copy(g_propsColor), "#showclips.props"
 	elseif triggerType < 0 then
 		return table.Copy(DEFAULT_BRUSH_COLORS[-triggerType]),
-			table.Copy(g_brushesColors[-triggerType]), "#showclips.type." .. -triggerType
+			table.Copy(g_brushesColors[-triggerType]), "#showtriggers.type." .. -triggerType
 	end
 	return table.Copy(DEFAULT_TRIGGERS_COLORS[triggerType]),
 		table.Copy(g_triggersColors[triggerType]), "#showtriggers.type." .. triggerType
@@ -812,6 +815,9 @@ local function OpenConfigMenu()
 		check:Dock(FILL)
 		check:SetTextColor(color_black)
 
+		-- store reference so callers can toggle the visual checkbox
+		pan.Check = check
+
 		if not triggerType then
 			check:SetConVar(cv_props:GetName())
 			return pan
@@ -884,8 +890,9 @@ local function OpenConfigMenu()
 	
 	-- Function to check if all options are enabled
 	local function areAllOptionsEnabled()
-		local clipsEnabled = cv_enabled:GetInt() ~= 0
-		local triggersEnabled = cv_triggers:GetBool()
+		-- consider "all brushes" only when cv_enabled equals ALL_BRUSH_TYPES
+		local clipsEnabled = cv_enabled:GetInt() == ALL_BRUSH_TYPES
+		local triggersEnabled = cv_triggers:GetBool() and cv_triggerTypes:GetInt() == ALL_TRIGGER_TYPES
 		local propsEnabled = cv_props:GetBool()
 		return clipsEnabled and triggersEnabled and propsEnabled
 	end
@@ -898,6 +905,32 @@ local function OpenConfigMenu()
 			toggleAllBtn:SetText("#showhidden.toggleall.enable")
 		end
 	end
+
+	-- helper to set all checkboxes visually (without relying on convar callbacks)
+	local function setAllChecks(checked)
+		-- brushes
+		for brushType = 1, BrushType.MAX do
+			local pan = brushes[brushType]
+			if pan and pan.Check and IsValid(pan.Check) then
+				pan.Check:SetChecked(checked)
+			end
+		end
+		-- triggers
+		for triggerType = 1, TriggerType.MAX do
+			local pan = trigs[triggerType]
+			if pan and pan.Check and IsValid(pan.Check) then
+				pan.Check:SetChecked(checked)
+			end
+		end
+		-- props
+		if enabProps and enabProps.Check and IsValid(enabProps.Check) then
+			enabProps.Check:SetChecked(checked)
+		end
+		-- main trigger enable label
+		if IsValid(enabTrig) then
+			enabTrig:SetChecked(cv_triggers:GetBool())
+		end
+	end
 	
 	toggleAllBtn.DoClick = function()
 		local allEnabled = areAllOptionsEnabled()
@@ -907,15 +940,19 @@ local function OpenConfigMenu()
 			cv_enabled:SetInt(0)
 			cv_triggers:SetBool(false)
 			cv_props:SetBool(false)
+			-- untick all checkboxes visually
+			timer.Simple(0, function() setAllChecks(false) end)
 		else
-			-- Enable all
-			cv_enabled:SetInt(1) -- Enable player clips (just the basic one)
+			-- Enable all (set full bitmasks for brushes and triggers)
+			cv_enabled:SetInt(ALL_BRUSH_TYPES)
 			cv_triggers:SetBool(true)
-			cv_triggerTypes:SetInt(ShowHidden.ALL_TYPES)
+			cv_triggerTypes:SetInt(ALL_TRIGGER_TYPES)
 			cv_props:SetBool(true)
+			-- tick all checkboxes visually
+			timer.Simple(0, function() setAllChecks(true) end)
 		end
 		
-		-- Update button text after the change
+		-- Update button text after the change (slightly delayed to allow convar callbacks)
 		timer.Simple(0.1, updateToggleAllButton)
 	end
 	
@@ -999,8 +1036,8 @@ concommand.Add("tm", OpenConfigMenu, nil, "Open PlayerClips and ShowTriggers set
 
 -- Console command for toggle all functionality
 concommand.Add("tma", function()
-	local clipsEnabled = cv_enabled:GetInt() ~= 0
-	local triggersEnabled = cv_triggers:GetBool()
+	local clipsEnabled = cv_enabled:GetInt() == ALL_BRUSH_TYPES
+	local triggersEnabled = cv_triggers:GetBool() and cv_triggerTypes:GetInt() == ALL_TRIGGER_TYPES
 	local propsEnabled = cv_props:GetBool()
 	local allEnabled = clipsEnabled and triggersEnabled and propsEnabled
 	
@@ -1011,10 +1048,10 @@ concommand.Add("tma", function()
 		cv_props:SetBool(false)
 		print("[ShowHidden] All options disabled")
 	else
-		-- Enable all
-		cv_enabled:SetInt(1) -- Enable player clips (just the basic one)
+		-- Enable all (set full bitmasks for brushes and triggers)
+		cv_enabled:SetInt(ALL_BRUSH_TYPES)
 		cv_triggers:SetBool(true)
-		cv_triggerTypes:SetInt(ShowHidden.ALL_TYPES)
+		cv_triggerTypes:SetInt(ALL_TRIGGER_TYPES)
 		cv_props:SetBool(true)
 		print("[ShowHidden] All options enabled")
 	end
